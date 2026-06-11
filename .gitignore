@@ -1,2 +1,35 @@
 *.workspace
 *.pdsbak
+
+# Log và dữ liệu tạm thời của Android Studio
+*.log
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Cấu hình IDE Android Studio / IntelliJ (Tránh xung đột khi team làm việc chung)
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/shelf
+
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
