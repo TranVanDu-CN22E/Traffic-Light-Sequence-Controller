@@ -1,394 +1,538 @@
-#include <SoftwareSerial.h>
-
-int tgAXanh  = 35;
-int tgVang  = 5;
-int tgBXanh  = 55;
-//================================================
-// CHÂN LED GIAO THÔNG
-//================================================
-
-const int H_RED    = 2;
-const int H_YELLOW = 3;
-const int H_GREEN  = 4;
-
-const int V_RED    = 5;
-const int V_YELLOW = 6;
-const int V_GREEN  = 7;
-
-//================================================
-// CHÂN 74HC595
-//================================================
-
-const int ST_CP = 8;
-const int SH_CP = 9;
-
-const int DS_A  = 11;
-
-//================================================
-// NÚT NHẤN
-//================================================
-
-const int BTN_MODE  = 12;
-const int BTN_POWER = 13;
-
-//================================================
-
-bool powerOn = true;
-
-enum TrafficMode
+#include "TrafficMode.h"
+#include "TrafficTiming.h"
+#include "LightPins.h"
+#include "SevenSegmentDisplay.cpp"
+#include "TrafficLight.cpp"
+#include "ButtonController.cpp"
+/*
+ * Lớp điều khiển trung tâm của hệ thống đèn giao thông.
+ *
+ * Nhiệm vụ:
+ * - Quản lý 4 cụm đèn giao thông
+ * - Quản lý LED 7 đoạn đếm ngược
+ * - Xử lý nút nhấn MODE và POWER
+ * - Nhận lệnh điều khiển từ Serial/Bluetooth
+ * - Điều phối các chế độ hoạt động:
+ *      + MODE_NORMAL
+ *      + MODE_FLASH
+ *      + MODE_CUSTOM
+ *
+ * Đây là lớp trung tâm (Controller) của toàn bộ hệ thống.
+ */
+class TrafficController
 {
-    MODE_NORMAL,
-    MODE_FLASH
-};
-
-TrafficMode mode = MODE_NORMAL;
-
-//================================================
-// HIỂN THỊ 7 ĐOẠN
-//================================================
-
-void hienThiDemNguoc(int h, int v)
-{
-    byte dataA =
-        ((h % 10) << 4) |
-        (h / 10);
-
-    byte dataB =
-        ((v % 10) << 4) |
-        (v / 10);
-
-    digitalWrite(ST_CP, LOW);
-
-    shiftOut(DS_A, SH_CP, MSBFIRST, dataB);
-    shiftOut(DS_A, SH_CP, MSBFIRST, dataA);
-
-    digitalWrite(ST_CP, HIGH);
-}
-
-//================================================
-// ĐỌC NÚT NHẤN
-//================================================
-
-void docNutNhan()
-{
-    static bool lastMode = HIGH;
-    static bool lastPower = HIGH;
-
-    bool modeState  = digitalRead(BTN_MODE);
-    bool powerState = digitalRead(BTN_POWER);
-
-    if(lastMode == HIGH && modeState == LOW)
+private:
+    enum PinMap
     {
-        if(mode == MODE_NORMAL)
-            mode = MODE_FLASH;
-        else
-            mode = MODE_NORMAL;
+        ST_CP = 8,
+        SH_CP = 9,
+        DS_A = 11,
+        BTN_MODE = 12,
+        BTN_POWER = 13,
+        HEARTBEAT_PIN = 10
+    };
 
-        delay(200);
+    TrafficLight lightA;
+    TrafficLight lightB;
+    TrafficLight lightC;
+    TrafficLight lightD;
+    SevenSegmentDisplay display;
+    ButtonController buttons;
+
+    TrafficTiming timing = {35, 5, 55};
+    TrafficMode mode = MODE_NORMAL;
+    bool powerOn = true;
+    String customRoute = "";
+    bool heartbeatState = LOW;
+    unsigned long lastHeartbeatTime = 0;
+/*
+ * Constructor.
+ *
+ * Khởi tạo:
+ * - 4 hướng đèn giao thông
+ * - LED 7 đoạn
+ * - Bộ điều khiển nút nhấn
+ *
+ * Đồng thời ánh xạ các chân Arduino
+ * tới các thiết bị tương ứng.
+ */
+public:
+    TrafficController()
+        : lightA(2, 3, 4),
+          lightB(5, 6, 7),
+          lightC(16, 15, 14),
+          lightD(19, 18, 17),
+          display(ST_CP, SH_CP, DS_A),
+          buttons(BTN_MODE, BTN_POWER)
+    {
     }
-
-    if(lastPower == HIGH && powerState == LOW)
+/*
+ * Khởi tạo toàn bộ hệ thống.
+ *
+ * Thực hiện:
+ * - Khởi tạo các cụm đèn giao thông
+ * - Khởi tạo LED 7 đoạn
+ * - Khởi tạo nút nhấn
+ * - Khởi tạo LED Heartbeat
+ * - Khởi tạo cổng Serial
+ *
+ * Hàm chỉ được gọi một lần trong setup().
+ */
+    void begin()
     {
-        powerOn = !powerOn;
-        delay(200);
+        lightA.begin();
+        lightB.begin();
+        lightC.begin();
+        lightD.begin();
+        display.begin();
+        buttons.begin();
+
+        pinMode(HEARTBEAT_PIN, OUTPUT);
+        digitalWrite(HEARTBEAT_PIN, LOW);
+
+        Serial.begin(9600);
+        Serial.setTimeout(50);
     }
-
-    lastMode = modeState;
-    lastPower = powerState;
-}
-
-//================================================
-// TẮT TOÀN BỘ
-//================================================
-
-void tatTatCa()
-{
-    digitalWrite(H_RED, LOW);
-    digitalWrite(H_YELLOW, LOW);
-    digitalWrite(H_GREEN, LOW);
-
-    digitalWrite(V_RED, LOW);
-    digitalWrite(V_YELLOW, LOW);
-    digitalWrite(V_GREEN, LOW);
-
-    hienThiDemNguoc(0, 0);
-}
-
-//================================================
-// CHẾ ĐỘ NHÁY VÀNG
-//================================================
-
-void cheDoNhayVang()
-{
-    digitalWrite(H_RED, LOW);
-    digitalWrite(H_GREEN, LOW);
-
-    digitalWrite(V_RED, LOW);
-    digitalWrite(V_GREEN, LOW);
-
-    digitalWrite(H_YELLOW, HIGH);
-    digitalWrite(V_YELLOW, HIGH);
-
-    hienThiDemNguoc(0, 0);
-
-    for(int i = 0; i < 50; i++)
+/*
+ * Hàm điều khiển chính của hệ thống.
+ *
+ * Được gọi liên tục trong loop().
+ *
+ * Luồng xử lý:
+ *
+ * 1. Đọc nút nhấn và Serial
+ * 2. Cập nhật LED Heartbeat
+ * 3. Kiểm tra trạng thái nguồn
+ * 4. Chạy chế độ tương ứng:
+ *      NORMAL
+ *      FLASH
+ *      CUSTOM
+ */
+    void update()
     {
-        docNutNhan();
-        docBluetooth();
+        pollInputs();
+        updateHeartbeat();
 
-        if(!powerOn || mode != MODE_FLASH)
+        if (!powerOn)
+        {
+            turnAllOff();
             return;
+        }
 
-        delay(10);
-    }
-
-    digitalWrite(H_YELLOW, LOW);
-    digitalWrite(V_YELLOW, LOW);
-
-    for(int i = 0; i < 100; i++)
-    {
-        docNutNhan();
-        docBluetooth();
-
-        if(!powerOn || mode != MODE_FLASH)
+        if (mode == MODE_FLASH)
+        {
+            runFlashMode();
             return;
+        }
 
-        delay(10);
-    }
-}
-
-//================================================
-// PHA 1
-// A XANH - B ĐỎ
-//================================================
-
-void pha1()
-{
-    digitalWrite(H_GREEN, HIGH);
-    digitalWrite(H_YELLOW, LOW);
-    digitalWrite(H_RED, LOW);
-
-    digitalWrite(V_GREEN, LOW);
-    digitalWrite(V_YELLOW, LOW);
-    digitalWrite(V_RED, HIGH);
-
-    for(int h = tgAXanh, v = tgAXanh + tgVang; h > 0; h--, v--)
-    {
-        hienThiDemNguoc(h, v);
-
-        for(int i=0;i<100;i++)
+        if (mode == MODE_CUSTOM)
         {
-            docNutNhan();
-            docBluetooth();
+            runCustomMode();
+            return;
+        }
 
-            if(!powerOn || mode != MODE_NORMAL)
+        runNormalMode();
+    }
+
+private:
+    /*
+    * Thu thập dữ liệu đầu vào.
+    *
+    * Bao gồm:
+    * - Nút MODE
+    * - Nút POWER
+    * - Dữ liệu Serial/Bluetooth
+    */
+    void pollInputs()
+    {
+        buttons.update(mode, powerOn);
+        readSerialCommand();
+    }
+/*
+ * Điều khiển LED Heartbeat.
+ *
+ * LED sẽ đổi trạng thái mỗi 200ms.
+ *
+ * Mục đích:
+ * - Báo hiệu chương trình vẫn đang hoạt động
+ * - Giúp phát hiện hệ thống bị treo
+ */
+    void updateHeartbeat()
+    {
+        unsigned long now = millis();
+
+        if (now - lastHeartbeatTime >= 200)
+        {
+            heartbeatState = !heartbeatState;
+            digitalWrite(HEARTBEAT_PIN, heartbeatState);
+            lastHeartbeatTime = now;
+        }
+    }
+    // tắt tất cả
+    void turnAllOff()
+    {
+        lightA.off();
+        lightB.off();
+        lightC.off();
+        lightD.off();
+        display.showCountdown(0, 0);
+    }
+    // bật chế độ flash
+    void runFlashMode()
+    {
+        setAllYellow(true);
+        display.showCountdown(0, 0);
+
+        if (!waitWhileMode(MODE_FLASH, 500))
+        {
+            return;
+        }
+
+        setAllYellow(false);
+        waitWhileMode(MODE_FLASH, 1000);
+    }
+    // chạy chế độ CUSTOM
+    void runCustomMode()
+    {
+        display.showCountdown(0, 0);
+
+        lightA.setAllowed(routeAllows('A'));
+        lightB.setAllowed(routeAllows('B'));
+        lightC.setAllowed(routeAllows('C'));
+        lightD.setAllowed(routeAllows('D'));
+    }
+/*
+ * Chế độ hoạt động bình thường.
+ *
+ * Chu trình:
+ *
+ * Pha 1:
+ *      A,C xanh
+ *      B,D đỏ
+ *
+ * Pha 2:
+ *      A,C vàng
+ *      B,D đỏ
+ *
+ * Pha 3:
+ *      B,D xanh
+ *      A,C đỏ
+ *
+ * Pha 4:
+ *      B,D vàng
+ *      A,C đỏ
+ *
+ * Sau đó lặp lại từ đầu.
+ */
+    void runNormalMode()
+    {
+        setPhaseGreenA();
+        countDown(timing.aGreen, timing.aGreen + timing.yellow, MODE_NORMAL);
+
+        if (!canContinueNormal())
+        {
+            return;
+        }
+
+        setPhaseYellowA();
+        countDown(timing.yellow, timing.yellow, MODE_NORMAL);
+
+        if (!canContinueNormal())
+        {
+            return;
+        }
+
+        setPhaseGreenB();
+        countDown(timing.bGreen + timing.yellow, timing.bGreen, MODE_NORMAL);
+
+        if (!canContinueNormal())
+        {
+            return;
+        }
+
+        setPhaseYellowB();
+        countDown(timing.yellow, timing.yellow, MODE_NORMAL);
+    }
+    // các phase sáng ở chế độ bình thường
+    void setPhaseGreenA()
+    {
+        lightA.green();
+        lightB.red();
+        lightC.green();
+        lightD.red();
+    }
+
+    void setPhaseYellowA()
+    {
+        lightA.yellow();
+        lightB.red();
+        lightC.yellow();
+        lightD.red();
+    }
+
+    void setPhaseGreenB()
+    {
+        lightA.red();
+        lightB.green();
+        lightC.red();
+        lightD.green();
+    }
+
+    void setPhaseYellowB()
+    {
+        lightA.red();
+        lightB.yellow();
+        lightC.red();
+        lightD.yellow();
+    }
+    // function bật đèn vàng ở chế độ FLASH
+    void setAllYellow(bool enabled)
+    {
+        lightA.setYellow(enabled);
+        lightB.setYellow(enabled);
+        lightC.setYellow(enabled);
+        lightD.setYellow(enabled);
+    }
+/*
+ * Hiển thị và thực hiện đếm ngược.
+ *
+ * horizontalStart:
+ *      thời gian hướng ngang.
+ *
+ * verticalStart:
+ *      thời gian hướng dọc.
+ *
+ * requiredMode:
+ *      chế độ yêu cầu phải duy trì.
+ *
+ * Trong mỗi giây:
+ * - cập nhật LED 7 đoạn
+ * - giảm bộ đếm
+ * - kiểm tra thay đổi chế độ
+ */
+    void countDown(int horizontalStart, int verticalStart, TrafficMode requiredMode)
+    {
+        int horizontal = horizontalStart;
+        int vertical = verticalStart;
+
+        while (horizontal > 0 || vertical > 0)
+        {
+            if (!powerOn || mode != requiredMode)
+            {
                 return;
+            }
+
+            display.showCountdown(horizontal, vertical);
+
+            if (!waitWhileMode(requiredMode, 1000))
+            {
+                return;
+            }
+
+            if (horizontal > 0)
+            {
+                horizontal--;
+            }
+
+            if (vertical > 0)
+            {
+                vertical--;
+            }
+        }
+    }
+/*
+ * Delay có kiểm soát.
+ *
+ * Khác với delay() thông thường,
+ * hàm vẫn:
+ * - đọc nút nhấn
+ * - đọc Serial
+ * - cập nhật Heartbeat
+ *
+ * Nếu:
+ *      mode thay đổi
+ * hoặc:
+ *      powerOff
+ *
+ * hàm sẽ thoát ngay lập tức.
+ *
+ * Trả về:
+ *      true  : chờ thành công
+ *      false : bị ngắt giữa chừng
+ */
+    bool waitWhileMode(TrafficMode requiredMode, unsigned long durationMs)
+    {
+        unsigned long start = millis();
+
+        while (millis() - start < durationMs)
+        {
+            pollInputs();
+            updateHeartbeat();
+
+            if (!powerOn || mode != requiredMode)
+            {
+                return false;
+            }
 
             delay(10);
         }
+
+        return true;
     }
-}
-
-//================================================
-// PHA 2
-// A VÀNG - B ĐỎ
-//================================================
-
-void pha2()
-{
-    digitalWrite(H_GREEN, LOW);
-    digitalWrite(H_YELLOW, HIGH);
-    digitalWrite(H_RED, LOW);
-
-    digitalWrite(V_GREEN, LOW);
-    digitalWrite(V_YELLOW, LOW);
-    digitalWrite(V_RED, HIGH);
-
-    for(int h = tgVang, v = tgVang; h > 0; h--, v--)
+/*
+ * Kiểm tra có được phép tiếp tục
+ * chế độ NORMAL hay không.
+ *
+ * Điều kiện:
+ * - Hệ thống đang bật
+ * - Chế độ hiện tại là NORMAL
+ */
+    bool canContinueNormal()
     {
-        hienThiDemNguoc(h, v);
-
-        for(int i=0;i<100;i++)
+        return powerOn && mode == MODE_NORMAL;
+    }
+/*
+ * Kiểm tra một hướng giao thông
+ * có nằm trong tuyến được phép đi hay không.
+ *
+ * Ví dụ:
+ *      customRoute = "A,C"
+ *
+ * routeAllows('A')
+ *      -> true
+ *
+ * routeAllows('B')
+ *      -> false
+ */
+    bool routeAllows(char direction)
+    {
+        return customRoute.indexOf(direction) >= 0;
+    }
+/*
+ * Đọc và xử lý lệnh từ Serial/Bluetooth.
+ *
+ * Các lệnh hỗ trợ:
+ *
+ * FLASH
+ * NORMAL
+ * POWER_ON
+ * POWER_OFF
+ * SET,aGreen,yellow,bGreen
+ * ROUTE,A,C
+ *
+ * Sau khi nhận lệnh sẽ cập nhật
+ * trạng thái hệ thống tương ứng.
+ */
+    void readSerialCommand()
+    {
+        if (!Serial.available())
         {
-            docNutNhan();
-            docBluetooth();
-
-            if(!powerOn || mode != MODE_NORMAL)
-                return;
-
-            delay(10);
+            return;
         }
-    }
-}
 
-//================================================
-// PHA 3
-// A ĐỎ - B XANH
-//================================================
+        String command = Serial.readString();
+        command.trim();
 
-void pha3()
-{
-    digitalWrite(H_GREEN, LOW);
-    digitalWrite(H_YELLOW, LOW);
-    digitalWrite(H_RED, HIGH);
-
-    digitalWrite(V_RED, LOW);
-    digitalWrite(V_YELLOW, LOW);
-    digitalWrite(V_GREEN, HIGH);
-
-    for(int h = tgBXanh + tgVang, v = tgBXanh; v > 0; h--, v--)
-    {
-        hienThiDemNguoc(h, v);
-
-        for(int i=0;i<100;i++)
-        {
-            docNutNhan();
-            docBluetooth();
-
-            if(!powerOn || mode != MODE_NORMAL)
-                return;
-
-            delay(10);
-        }
-    }
-}
-
-//================================================
-// PHA 4
-// A ĐỎ - B VÀNG
-//================================================
-
-void pha4()
-{
-    digitalWrite(H_GREEN, LOW);
-    digitalWrite(H_YELLOW, LOW);
-    digitalWrite(H_RED, HIGH);
-
-    digitalWrite(V_GREEN, LOW);
-    digitalWrite(V_YELLOW, HIGH);
-    digitalWrite(V_RED, LOW);
-
-    for(int h = tgVang, v = tgVang; h > 0; h--, v--)
-    {
-        hienThiDemNguoc(h, v);
-
-        for(int i=0;i<100;i++)
-        {
-            docNutNhan();
-            docBluetooth();
-
-            if(!powerOn || mode != MODE_NORMAL)
-                return;
-
-            delay(10);
-        }
-    }
-
-    digitalWrite(V_YELLOW, LOW);
-}
-
-void docBluetooth()
-{
-    if(Serial.available())
-    {
-        String cmd = Serial.readString();
-
-        cmd.trim();
-
-        if(cmd == "FLASH")
+        if (command == "FLASH")
         {
             mode = MODE_FLASH;
-            Serial.println("Đã bạt chế độ FLASH.");
+            Serial.println("Da bat che do FLASH.");
         }
-        else if(cmd == "NORMAL")
+        else if (command == "NORMAL")
         {
             mode = MODE_NORMAL;
-            Serial.println("Đẫ bật chế độ bình thường.");
+            Serial.println("Da bat che do binh thuong.");
         }
-        else if(cmd == "POWER_ON")
+        else if (command == "POWER_ON")
         {
             powerOn = true;
-            Serial.println("Đã nhận tín hiệu khởi động.");
+            Serial.println("Da nhan tin hieu khoi dong.");
         }
-        else if(cmd == "POWER_OFF")
+        else if (command == "POWER_OFF")
         {
             powerOn = false;
-            Serial.println("Đa tắt hệ thống.");
+            Serial.println("Da tat he thong.");
         }
-        else if(cmd.startsWith("SET"))
+        else if (command.startsWith("SET"))
         {
-            int a,b,c;
-
-            sscanf(
-                cmd.c_str(),
-                "SET,%d,%d,%d",
-                &a,&b,&c
-            );
-
-            tgAXanh = a;
-            tgVang = b;
-            tgBXanh = c;
-
-            Serial.println("Cập nhập thời gian, vui lòng khởi động lại.");
+            updateTiming(command);
+        }
+        else if (command.startsWith("ROUTE"))
+        {
+            updateRoute(command);
         }
     }
-}
-//================================================
-// SETUP
-//================================================
+/*
+ * Cập nhật thời gian đèn giao thông.
+ *
+ * Cú pháp:
+ *      SET,aGreen,yellow,bGreen
+ *
+ * Ví dụ:
+ *      SET,35,5,55
+ *
+ * Kết quả:
+ *      timing.aGreen = 35
+ *      timing.yellow = 5
+ *      timing.bGreen = 55
+ */
+    void updateTiming(const String &command)
+    {
+        int aGreen = 0;
+        int yellow = 0;
+        int bGreen = 0;
+
+        if (sscanf(command.c_str(), "SET,%d,%d,%d", &aGreen, &yellow, &bGreen) == 3 &&
+            aGreen > 0 && yellow > 0 && bGreen > 0)
+        {
+            timing.aGreen = aGreen;
+            timing.yellow = yellow;
+            timing.bGreen = bGreen;
+            Serial.println("Da cap nhat thoi gian.");
+            return;
+        }
+
+        Serial.println("Lenh SET khong hop le. Dung: SET,aGreen,yellow,bGreen");
+    }
+/*
+ * Cập nhật tuyến đường được phép lưu thông.
+ *
+ * Ví dụ:
+ *      ROUTE,A,D
+ *
+ * Kết quả:
+ *      customRoute = "A,D"
+ *
+ * Đồng thời chuyển hệ thống
+ * sang MODE_CUSTOM.
+ */
+    void updateRoute(const String &command)
+    {
+        int separatorIndex = command.indexOf(',');
+
+        if (separatorIndex < 0)
+        {
+            separatorIndex = command.indexOf(' ');
+        }
+
+        customRoute = separatorIndex >= 0 ? command.substring(separatorIndex + 1) : "";
+        customRoute.toUpperCase();
+        customRoute.trim();
+        mode = MODE_CUSTOM;
+
+        Serial.print("Route = ");
+        Serial.println(customRoute);
+    }
+};
+
+TrafficController trafficController;
 
 void setup()
 {
-    pinMode(H_RED, OUTPUT);
-    pinMode(H_YELLOW, OUTPUT);
-    pinMode(H_GREEN, OUTPUT);
-
-    pinMode(V_RED, OUTPUT);
-    pinMode(V_YELLOW, OUTPUT);
-    pinMode(V_GREEN, OUTPUT);
-
-    pinMode(ST_CP, OUTPUT);
-    pinMode(SH_CP, OUTPUT);
-    pinMode(DS_A, OUTPUT);
-
-    pinMode(BTN_MODE, INPUT_PULLUP);
-    pinMode(BTN_POWER, INPUT_PULLUP);
-
-    Serial.begin(9600);
+    trafficController.begin();
 }
-
-//================================================
-// LOOP
-//================================================
 
 void loop()
 {
-    docNutNhan();
-    docBluetooth();
-
-    if(!powerOn)
-    {
-        tatTatCa();
-        return;
-    }
-
-    if(mode == MODE_FLASH)
-    {
-        cheDoNhayVang();
-        return;
-    }
-
-    pha1();
-
-    if(!powerOn || mode != MODE_NORMAL) return;
-
-    pha2();
-
-    if(!powerOn || mode != MODE_NORMAL) return;
-
-    pha3();
-
-    if(!powerOn || mode != MODE_NORMAL) return;
-
-    pha4();
+    trafficController.update();
 }
