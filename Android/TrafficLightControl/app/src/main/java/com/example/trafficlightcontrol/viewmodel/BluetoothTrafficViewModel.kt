@@ -5,13 +5,13 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import androidx.annotation.RequiresPermission
+import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import com.example.trafficlightcontrol.bluetooth.BluetoothManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class TrafficViewModel : ViewModel() {
-
+class BluetoothTrafficViewModel : ViewModel() {
     private val bluetoothManager = BluetoothManager()
     private val _devices =
         MutableStateFlow<List<BluetoothDevice>>(emptyList())
@@ -38,6 +38,7 @@ class TrafficViewModel : ViewModel() {
     fun updateResponse(msg: String) {
         _response.value = msg
     }
+    private val selectedRoutes = mutableStateListOf<String>()
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun connect(device: BluetoothDevice) {
 
@@ -91,5 +92,20 @@ class TrafficViewModel : ViewModel() {
         bluetoothManager.send(
             "SET,$a,$yellow,$b"
         )
+    }
+
+    fun toggleRoute(route: String) {
+        if (selectedRoutes.contains(route)) {
+            selectedRoutes.remove(route)
+        } else {
+            selectedRoutes.add(route)
+        }
+
+        val command = selectedRoutes.sorted().joinToString("")
+        bluetoothManager.send("ROUTE,$command")
+    }
+
+    fun isSelected(route: String): Boolean {
+        return selectedRoutes.contains(route)
     }
 }

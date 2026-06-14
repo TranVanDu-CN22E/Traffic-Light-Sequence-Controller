@@ -33,3 +33,7 @@ captures/
 .externalNativeBuild
 .cxx
 local.properties
+
+serviceAccountKey.json
+google-services.json
+Android\TrafficLightControl\google-services.json
