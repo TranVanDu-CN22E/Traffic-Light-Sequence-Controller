@@ -5,14 +5,13 @@
 #include <Arduino.h>
 
 /*
- * Lớp quản lý các nút nhấn vật lý của hệ thống.
- *
- * Chức năng:
- * - Đọc nút chuyển chế độ (MODE)
- * - Đọc nút bật/tắt hệ thống (POWER)
- * - Chống dội phím (Debounce)
- * - Cập nhật trạng thái mode và nguồn
- */
+Lớp quản lý các nút nhấn vật lý của hệ thống.
+Chức năng:
+ - Đọc nút chuyển chế độ (MODE)
+ - Đọc nút bật/tắt hệ thống (POWER)
+ - Chống dội phím (Debounce)
+ - Cập nhật trạng thái mode và nguồn
+*/
 class ButtonController
 {
 private:
@@ -37,13 +36,9 @@ private:
 public:
 
     /*
-     * Constructor
-     *
-     * Khởi tạo đối tượng ButtonController
-     * và lưu lại các chân nút nhấn.
-     *
-     * modeButton  : chân nút MODE
-     * powerButton : chân nút POWER
+       Constructor: Khởi tạo đối tượng ButtonController và lưu lại các chân nút nhấn.
+       modeButton  : chân nút MODE
+       powerButton : chân nút POWER
      */
     ButtonController(byte modeButton, byte powerButton)
         : modePin(modeButton), powerPin(powerButton)
@@ -51,13 +46,12 @@ public:
     }
 
     /*
-     * Khởi tạo phần cứng cho nút nhấn.
-     *
-     * INPUT_PULLUP:
-     * - Không nhấn = HIGH
-     * - Nhấn       = LOW
-     *
-     * Không cần điện trở kéo lên bên ngoài.
+       Khởi tạo phần cứng cho nút nhấn.
+       INPUT_PULLUP:
+       - Không nhấn = HIGH
+       - Nhấn       = LOW
+     
+       Không cần điện trở kéo lên bên ngoài.
      */
     void begin()
     {
@@ -66,16 +60,14 @@ public:
     }
 
     /*
-     * Cập nhật trạng thái nút nhấn.
-     *
-     * Chức năng:
-     * - Đọc trạng thái hai nút
-     * - Chống dội phím
-     * - Chuyển mode khi nhấn MODE
-     * - Bật/tắt hệ thống khi nhấn POWER
-     *
-     * mode    : chế độ hiện tại của hệ thống
-     * powerOn : trạng thái nguồn hiện tại
+      Cập nhật trạng thái nút nhấn.
+        Chức năng:
+            - Đọc trạng thái hai nút
+            - Chống dội phím
+            - Chuyển mode khi nhấn MODE
+            - Bật/tắt hệ thống khi nhấn POWER
+      mode    : chế độ hiện tại của hệ thống
+      powerOn : trạng thái nguồn hiện tại
      */
     void update(TrafficMode &mode, bool &powerOn)
     {
@@ -92,10 +84,9 @@ public:
         if (now - lastDebounceTime >= debounceMs)
         {
             /*
-             * Phát hiện cạnh xuống:
-             * HIGH -> LOW
-             *
-             * Nghĩa là người dùng vừa nhấn nút MODE.
+            Phát hiện cạnh xuống:
+            HIGH -> LOW
+            Nghĩa là người dùng vừa nhấn nút MODE.
              */
             if (lastModeState == HIGH && modeState == LOW)
             {
@@ -103,17 +94,11 @@ public:
                 lastDebounceTime = now;
             }
 
-            /*
-             * Phát hiện cạnh xuống:
-             * HIGH -> LOW
-             *
-             * Nghĩa là người dùng vừa nhấn nút POWER.
-             */
             if (lastPowerState == HIGH && powerState == LOW)
             {
                 // Đảo trạng thái nguồn
                 powerOn = !powerOn;
-
+                Serial.println("LOG,Da tuong tac voi nut POWER bang BUTTON.");
                 lastDebounceTime = now;
             }
         }
@@ -126,30 +111,30 @@ public:
 private:
 
     /*
-     * Chuyển sang chế độ kế tiếp.
-     *
-     * Chu trình:
-     * NORMAL -> FLASH -> CUSTOM -> NORMAL
-     *
-     * currentMode : chế độ hiện tại
-     *
-     * return : chế độ kế tiếp
+       Chuyển sang chế độ kế tiếp.
+       Chu trình:
+       NORMAL -> FLASH -> CUSTOM -> NORMAL
+       currentMode : chế độ hiện tại
+       return : chế độ kế tiếp
      */
     TrafficMode nextMode(TrafficMode currentMode)
     {
         // Chế độ bình thường -> Nhấp nháy
         if (currentMode == MODE_NORMAL)
         {
+            Serial.println("LOG,Da bat che do FLASH bang BUTTON.");
             return MODE_FLASH;
         }
 
         // Chế độ nhấp nháy -> Tùy chỉnh
         if (currentMode == MODE_FLASH)
         {
+            Serial.println("LOG,Da bat che do CUSTOM bang BUTTON.");
             return MODE_CUSTOM;
         }
 
         // CUSTOM -> quay lại NORMAL
+        Serial.println("LOG,Da bat che do NORMAL bang BUTTON.");
         return MODE_NORMAL;
     }
 };

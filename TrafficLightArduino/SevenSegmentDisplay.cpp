@@ -4,56 +4,48 @@
 #include <Arduino.h>
 
 /*
- * Lớp quản lý LED 7 đoạn thông qua IC dịch dữ liệu (74HC595).
- *
- * Chức năng:
- * - Khởi tạo các chân giao tiếp với IC 74HC595
- * - Hiển thị giá trị đếm ngược lên LED 7 đoạn
- * - Hỗ trợ hiển thị đồng thời 2 giá trị:
- *      + horizontal (ngang)
- *      + vertical (dọc)
- *
- * Dữ liệu được gửi theo dạng BCD:
- *      Hàng chục | Hàng đơn vị
- *
- * Ví dụ:
- *      35 -> 0011 0101
+   Lớp quản lý LED 7 đoạn thông qua IC dịch dữ liệu (74HC595).
+   Chức năng:
+   - Khởi tạo các chân giao tiếp với IC 74HC595
+   - Hiển thị giá trị đếm ngược lên LED 7 đoạn
+   - Hỗ trợ hiển thị đồng thời 2 giá trị:
+        + horizontal (ngang)
+        + vertical (dọc)
+  
+   Dữ liệu được gửi theo dạng BCD:
+        Hàng chục | Hàng đơn vị
  */
 class SevenSegmentDisplay
 {
 private:
 
     /*
-     * Chân chốt dữ liệu (ST_CP)
-     *
-     * Khi chuyển từ LOW -> HIGH
-     * dữ liệu trong thanh ghi dịch sẽ được xuất ra LED.
+       Chân chốt dữ liệu (ST_CP)
+       Khi chuyển từ LOW -> HIGH
+       dữ liệu trong thanh ghi dịch sẽ được xuất ra LED.
      */
     byte latchPin;
 
     /*
-     * Chân xung Clock (SH_CP)
-     *
-     * Mỗi xung clock sẽ dịch dữ liệu vào IC 74HC595.
+       Chân xung Clock (SH_CP)
+       Mỗi xung clock sẽ dịch dữ liệu vào IC 74HC595.
      */
     byte clockPin;
 
     /*
-     * Chân dữ liệu nối với DS của 74HC595.
+       Chân dữ liệu nối với DS của 74HC595.
      */
     byte dataPin;
 
 public:
 
     /*
-     * Constructor
-     *
-     * Khởi tạo đối tượng LED 7 đoạn
-     * và lưu các chân điều khiển.
-     *
-     * latch : chân ST_CP
-     * clock : chân SH_CP
-     * data  : chân DS
+       Constructor
+       Khởi tạo đối tượng LED 7 đoạn và lưu các chân điều khiển.
+     
+       latch : chân ST_CP
+       clock : chân SH_CP
+       data  : chân DS
      */
     SevenSegmentDisplay(byte latch, byte clock, byte data)
         : latchPin(latch),
@@ -63,11 +55,10 @@ public:
     }
 
     /*
-     * Khởi tạo phần cứng.
-     *
-     * Chức năng:
-     * - Cấu hình các chân điều khiển là OUTPUT
-     * - Hiển thị giá trị mặc định 00 00
+       Khởi tạo phần cứng.
+       Chức năng:
+       - Cấu hình các chân điều khiển là OUTPUT
+       - Hiển thị giá trị mặc định 00 00
      */
     void begin()
     {
@@ -93,51 +84,45 @@ public:
     void showCountdown(int horizontal, int vertical)
     {
         /*
-         * Giới hạn giá trị trong khoảng 0-99.
-         *
-         * Nếu nhỏ hơn 0:
-         *      -> 0
-         *
-         * Nếu lớn hơn 99:
-         *      -> 99
+            Giới hạn giá trị trong khoảng 0-99.
+            Nếu nhỏ hơn 0:
+                -> 0
+            Nếu lớn hơn 99:
+                -> 99
          */
         horizontal = constrain(horizontal, 0, 99);
         vertical = constrain(vertical, 0, 99);
 
         /*
-         * Chuyển số thành dữ liệu BCD.
-         *
-         * Ví dụ:
-         *      horizontal = 35
-         *
-         * Hàng chục:
-         *      3
-         *
-         * Hàng đơn vị:
-         *      5
-         *
-         * Kết quả:
-         *      0011 0101
+          Chuyển số thành dữ liệu BCD.
+          Ví dụ:
+               horizontal = 35
+          Hàng chục:
+               3
+          Hàng đơn vị:
+               5
+          Kết quả:
+               0011 0101
          */
         byte dataA =
             ((horizontal % 10) << 4) |
             (horizontal / 10);
 
         /*
-         * Chuyển giá trị vertical
-         * sang dạng BCD tương tự.
+          Chuyển giá trị vertical
+          sang dạng BCD tương tự.
          */
         byte dataB =
             ((vertical % 10) << 4) |
             (vertical / 10);
 
         /*
-         * Bắt đầu truyền dữ liệu.
+          Bắt đầu truyền dữ liệu.
          */
         digitalWrite(latchPin, LOW);
 
         /*
-         * Gửi dữ liệu của hướng dọc.
+          Gửi dữ liệu của hướng dọc.
          */
         shiftOut(
             dataPin,
@@ -147,7 +132,7 @@ public:
         );
 
         /*
-         * Gửi dữ liệu của hướng ngang.
+          Gửi dữ liệu của hướng ngang.
          */
         shiftOut(
             dataPin,
@@ -157,7 +142,7 @@ public:
         );
 
         /*
-         * Chốt dữ liệu để hiển thị ra LED.
+          Chốt dữ liệu để hiển thị ra LED.
          */
         digitalWrite(latchPin, HIGH);
     }
