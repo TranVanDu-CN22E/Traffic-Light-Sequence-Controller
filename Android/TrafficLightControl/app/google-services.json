@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "444711267084",
+    "firebase_url": "https://trafficlightcontrol-86ea4-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "trafficlightcontrol-86ea4",
+    "storage_bucket": "trafficlightcontrol-86ea4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:444711267084:android:fef027f73c5feaf56c7729",
+        "android_client_info": {
+          "package_name": "com.example.trafficlightcontrol"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9N9yU0w_7TO2ZS7nKXu3slRmpTq_XS8w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
