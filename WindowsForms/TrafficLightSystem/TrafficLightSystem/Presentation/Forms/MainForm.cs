@@ -1,3 +1,5 @@
+using TrafficLightSystem.Application.Controllers;
+using TrafficLightSystem.Infrastructure.Internet;
 using TrafficLightSystem.Presentation.Tabs;
 
 namespace TrafficLightSystem.Presentation.Forms
@@ -32,10 +34,23 @@ namespace TrafficLightSystem.Presentation.Forms
             var tabInternet = new TabPage("Internet");
             tabInternet.Controls.Add(new TabInternet() { Dock = DockStyle.Fill });
 
+            // TAB LOG
+            var firestore = new FirestoreService();
+            var logController = new LogController(firestore);
+            var tabLogs = new TabPage("Logs");
+
+            tabLogs.Controls.Add(
+                new LogTab(logController)
+                {
+                    Dock = DockStyle.Fill
+                });
+
             // ADD TO TABCONTROL
             tabControl1.TabPages.Add(tabCom);
             tabControl1.TabPages.Add(tabBluetooth);
             tabControl1.TabPages.Add(tabInternet);
+            tabControl1.TabPages.Add(tabLogs);
+
         }
     }
 }

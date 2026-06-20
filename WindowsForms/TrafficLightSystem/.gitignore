@@ -1,5 +1,6 @@
 *.secret
 *.config.json
+*serviceAccountKey.json
 
 [Dd]ebug/
 [Rr]elease/

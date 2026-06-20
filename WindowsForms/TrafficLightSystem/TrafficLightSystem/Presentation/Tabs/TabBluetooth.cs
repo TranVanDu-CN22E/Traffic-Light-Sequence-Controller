@@ -24,5 +24,10 @@ namespace TrafficLightSystem.Presentation.Tabs
 
             this.Controls.Add(view);
         }
+
+        private void TabBluetooth_Load(object sender, EventArgs e)
+        {
+
+        }
     }
 }

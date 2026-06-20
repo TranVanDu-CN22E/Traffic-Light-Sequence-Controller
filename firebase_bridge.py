@@ -255,7 +255,6 @@ def socket_receive_thread():
 
     client = None
 
-
 # Đợi WINFORMS
 def socket_accept_thread():
     global client
