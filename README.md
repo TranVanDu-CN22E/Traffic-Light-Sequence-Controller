@@ -37,7 +37,8 @@ Unlike traditional standalone traffic light systems, every platform communicates
 
 # System Architecture
 
-//
+<img width="1734" height="737" alt="System Architecture1" src="https://github.com/user-attachments/assets/ce253d13-7f07-46ac-9144-fc92663ceaf1" />
+
 ---
 
 # Communication Flow
