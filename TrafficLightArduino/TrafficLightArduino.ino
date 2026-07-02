@@ -175,32 +175,56 @@ Chu trình:
 */
     void runNormalMode()
     {
-        setPhaseGreenA();
-        countDown(timing.aGreen, timing.aGreen + timing.yellow, MODE_NORMAL);
-
-        if (!canContinueNormal())
+        for (int t = timing.aGreen + timing.yellow; t > 0; t--)
         {
-            return;
+            // A,C
+            if (t > timing.yellow)
+            {
+                lightA.green();
+                lightC.green();
+            }
+            else
+            {
+                lightA.yellow();
+                lightC.yellow();
+            }
+
+            // B,D
+            lightB.red();
+            lightD.red();
+
+            display.showCountdown(
+                (t > timing.yellow) ? (t - timing.yellow) : t,
+                t
+            );
+
+            if (!waitWhileMode(MODE_NORMAL, 1000))
+                return;
         }
-
-        setPhaseYellowA();
-        countDown(timing.yellow, timing.yellow, MODE_NORMAL);
-
-        if (!canContinueNormal())
+        for (int t = timing.bGreen + timing.yellow; t > 0; t--)
         {
-            return;
+            lightA.red();
+            lightC.red();
+
+            if (t > timing.yellow)
+            {
+                lightB.green();
+                lightD.green();
+            }
+            else
+            {
+                lightB.yellow();
+                lightD.yellow();
+            }
+
+            display.showCountdown(
+                t,
+                (t > timing.yellow) ? (t - timing.yellow) : t
+            );
+
+            if (!waitWhileMode(MODE_NORMAL, 1000))
+                return;
         }
-
-        setPhaseGreenB();
-        countDown(timing.bGreen + timing.yellow, timing.bGreen, MODE_NORMAL);
-
-        if (!canContinueNormal())
-        {
-            return;
-        }
-
-        setPhaseYellowB();
-        countDown(timing.yellow, timing.yellow, MODE_NORMAL);
     }
     // các phase sáng ở chế độ bình thường
     void setPhaseGreenA()
